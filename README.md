@@ -38,10 +38,13 @@ All components run under the default **restricted SCC** — no anyuid or elevate
 ## Deployment steps
 
 ### 0. Clone this repo
-**git clone ...:**
+
 ```bash
 git clone https://github.com/johwes/eneo-openshift.git
+cd eneo-openshift
 ```
+
+If you already have a local copy, run `git pull` first — the manifests must match the version described in these instructions.
 
 ### 1. Create or join a project
 
