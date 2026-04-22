@@ -110,15 +110,22 @@ find manifests/ -name '*.yaml' -exec sed -i \
   -e "s|https://REPLACE_WITH_YOUR_DOMAIN|https://${ENEO_HOST}|g" {} \;
 ```
 
-### 5. Configure StorageClass (if needed)
+### 5. Verify StorageClass for ReadWriteMany PVCs
 
-`eneo-backend-data-pvc` and `eneo-temp-files-pvc` require ReadWriteMany. Edit `manifests/04-pvc.yaml` and set `storageClassName` for those two PVCs.
+`eneo-backend-data-pvc` and `eneo-temp-files-pvc` require a ReadWriteMany-capable StorageClass. The manifests are pre-configured with `efs-sc`, which is correct for Red Hat Developer Sandbox (AWS-backed).
+
+If you are deploying to a **different cluster**, replace `efs-sc` in `manifests/04-pvc.yaml` with the appropriate RWX StorageClass for your environment:
 
 ```bash
-oc get storageclass
+oc get storageclass   # find an RWX-capable class
 ```
 
-On **Red Hat Developer Sandbox** (AWS-backed): use `efs-sc`.
+Then update the two RWX PVCs in `manifests/04-pvc.yaml`:
+```yaml
+storageClassName: "<your-rwx-storageclass>"
+```
+
+> **Important**: using the wrong StorageClass (e.g. the default `gp3`, which is ReadWriteOnce only) will leave the PVCs in `Pending` state and all application pods will never start.
 
 ### 6. Apply infrastructure tier
 
