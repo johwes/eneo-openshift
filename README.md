@@ -91,6 +91,7 @@ oc get storageclass
 
 ```bash
 oc apply -f manifests/00-namespace.yaml
+oc apply -f manifests/01-rbac.yaml
 oc apply -f manifests/02-secrets.yaml
 oc apply -f manifests/03-configmap.yaml
 oc apply -f manifests/04-pvc.yaml
@@ -150,7 +151,7 @@ To upgrade:
 ```
 manifests/
 ├── 00-namespace.yaml      Project namespace
-├── 01-rbac.yaml           ServiceAccounts + SCC bindings (requires cluster-admin)
+├── 01-rbac.yaml           ServiceAccount
 ├── 02-secrets.yaml        Secret templates — fill in before applying
 ├── 03-configmap.yaml      Non-sensitive configuration
 ├── 04-pvc.yaml            PersistentVolumeClaims
