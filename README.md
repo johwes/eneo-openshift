@@ -113,7 +113,7 @@ Once all pods are Running, visit `https://eneo.apps.<your-cluster-domain>`.
 
 Default credentials (set in `03-configmap.yaml` → `DEFAULT_USER_*`):
 - Email: `admin@example.com`
-- Password: the value you set for `DEFAULT_USER_PASSWORD`
+- Password: `REPLACE_WITH_INITIAL_PASSWORD` *(the literal placeholder value, if you have not changed it before deploying)*
 
 **Change the password immediately after first login.**
 
