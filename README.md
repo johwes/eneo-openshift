@@ -90,9 +90,16 @@ In `manifests/03-configmap.yaml`, set `DEFAULT_USER_PASSWORD` to a strong passwo
 
 ### 4. Configure the domain
 
-Find your cluster's app domain:
+Find your cluster's app domain. On a full cluster:
 ```bash
 oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}'
+```
+
+On **Red Hat Developer Sandbox** (or any cluster where that command returns Forbidden), derive it from the console URL instead:
+```bash
+oc whoami --show-console
+# Returns: https://console-openshift-console.apps.<cluster>.<base-domain>
+# Your app domain is everything from "apps." onward
 ```
 
 Set `ENEO_HOST` to your intended hostname and replace the placeholders in all manifests:
