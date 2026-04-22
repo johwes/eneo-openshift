@@ -2,15 +2,15 @@
 
 OpenShift manifests for deploying [Eneo](https://github.com/eneo-ai/eneo) — the open-source AI platform for the public sector.
 
-Traefik is replaced by OpenShift Routes. 
+Traefik is replaced by OpenShift Routes.
 
 ---
 
 ## Prerequisites
 
 - OpenShift 4.x cluster
-- A ReadWriteMany-capable StorageClass for the shared volumes (e.g. ODF/CephFS, NFS)
-- At least one LLM provider API key (OpenAI, Anthropic, Azure, or a self-hosted model)
+- A ReadWriteMany-capable StorageClass for the shared volumes (e.g. ODF/CephFS, NFS, EFS)
+- At least one LLM provider API key (OpenAI, Anthropic, Azure, or a self-hosted vLLM endpoint)
 - An OIDC identity provider, or use the built-in username/password login
 
 ---
@@ -37,87 +37,110 @@ All components run under the default **restricted SCC** — no anyuid or elevate
 
 ## Deployment steps
 
-### 1. Create the project
+### 1. Create or join a project
 
+**New project:**
 ```bash
 oc new-project eneo
 ```
 
-### 2. Apply RBAC
-
+**Existing namespace** (e.g. Red Hat Developer Sandbox, where you cannot create new projects):
 ```bash
-oc apply -f manifests/01-rbac.yaml
+NAMESPACE=<your-namespace>   # e.g. rhn-sa-johndoe-dev
+find manifests/ -name '*.yaml' -exec sed -i "s/namespace: eneo/namespace: ${NAMESPACE}/g" {} \;
 ```
+Skip `manifests/00-namespace.yaml` when applying — it creates a Namespace object that already exists.
 
-### 3. Configure secrets
+### 2. Configure secrets
 
-Edit `manifests/02-secrets.yaml` and replace all `REPLACE_WITH_*` placeholders:
+Copy `manifests/02-secrets.yaml`, fill in all `REPLACE_WITH_*` values, and keep the filled file outside version control.
 
+Generate strong values:
 ```bash
-# Generate values
 POSTGRES_PASSWORD=$(openssl rand -base64 32)
 JWT_SECRET=$(openssl rand -hex 32)
 URL_SIGNING_KEY=$(openssl rand -hex 32)
-ENEO_SUPER_API_KEY=$(openssl rand -hex 32)
 ENCRYPTION_KEY=$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
+ENEO_SUPER_API_KEY=$(openssl rand -hex 32)
 ```
 
-`ENCRYPTION_KEY` is required for the admin model-provider UI (it encrypts stored API keys in the database). Generate it as shown above and set it in `eneo-backend-secret`.
+`ENCRYPTION_KEY` is **required** — without it, the admin model-provider UI cannot save API keys.
 
 > **Never commit the filled-in secrets file to version control.**
 > Use Sealed Secrets, HashiCorp Vault, or OpenShift Secrets Manager instead.
 
+### 3. Set the initial admin password
+
+In `manifests/03-configmap.yaml`, set `DEFAULT_USER_PASSWORD` to a strong password you will use on first login. This value is stored in a ConfigMap (not a Secret) — change it in the UI immediately after first login.
+
 ### 4. Configure the domain
 
-Replace `REPLACE_WITH_YOUR_CLUSTER_DOMAIN` in the following files:
-- `manifests/03-configmap.yaml` — `PUBLIC_ORIGIN`, `ENEO_BACKEND_URL`, `PUBLIC_ENEO_BACKEND_URL`, `ORIGIN`
-- `manifests/10-routes.yaml` — `host` field in all five Route objects
-
-The hostname format is typically: `eneo.apps.<cluster-name>.<base-domain>`
-
-Find your cluster domain with:
+Find your cluster's app domain:
 ```bash
 oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}'
 ```
 
-### 5. Configure your StorageClass (if needed)
+Set `ENEO_HOST` to your intended hostname and replace the placeholders in all manifests:
+```bash
+ENEO_HOST=eneo.apps.<cluster-name>.<base-domain>
+find manifests/ -name '*.yaml' -exec sed -i \
+  -e "s/eneo\.apps\.REPLACE_WITH_YOUR_CLUSTER_DOMAIN/${ENEO_HOST}/g" \
+  -e "s|https://REPLACE_WITH_YOUR_DOMAIN|https://${ENEO_HOST}|g" {} \;
+```
 
-The `eneo-backend-data-pvc` and `eneo-temp-files-pvc` PVCs require ReadWriteMany.
-Edit `manifests/04-pvc.yaml` and uncomment/set the `storageClassName` field.
+### 5. Configure StorageClass (if needed)
 
-Check available StorageClasses:
+`eneo-backend-data-pvc` and `eneo-temp-files-pvc` require ReadWriteMany. Edit `manifests/04-pvc.yaml` and set `storageClassName` for those two PVCs.
+
 ```bash
 oc get storageclass
 ```
 
-### 6. Apply all manifests
+On **Red Hat Developer Sandbox** (AWS-backed): use `efs-sc`.
+
+### 6. Apply infrastructure tier
+
+Apply RBAC, secrets, config, PVCs, postgres, and redis — then **wait for PostgreSQL before continuing**:
 
 ```bash
-oc apply -f manifests/00-namespace.yaml
 oc apply -f manifests/01-rbac.yaml
 oc apply -f manifests/02-secrets.yaml
 oc apply -f manifests/03-configmap.yaml
 oc apply -f manifests/04-pvc.yaml
 oc apply -f manifests/05-postgres.yaml
 oc apply -f manifests/06-redis.yaml
+
+oc rollout status statefulset/eneo-postgres --timeout=180s
+```
+
+### 7. Enable the pgvector extension (required)
+
+The SCLORG PostgreSQL image does not auto-enable the `vector` extension, and the `eneo` database user is not a superuser. Run this once immediately after PostgreSQL is ready — before the backend starts:
+
+```bash
+oc exec eneo-postgres-0 -- psql -d eneo -c "CREATE EXTENSION IF NOT EXISTS vector;"
+```
+
+> **Why is this step needed?** The Eneo backend's `db-init` migration (`init_db.py`) creates pgvector indexes. If the extension does not exist when the migration runs, the backend will fail to start. The community `pgvector/pgvector` Docker image enables the extension automatically; the SCLORG image requires this one-time manual step.
+
+### 8. Apply application tier
+
+```bash
 oc apply -f manifests/07-backend.yaml
 oc apply -f manifests/08-worker.yaml
 oc apply -f manifests/09-frontend.yaml
 oc apply -f manifests/10-routes.yaml
+
+oc rollout status deployment/eneo-backend deployment/eneo-worker deployment/eneo-frontend --timeout=300s
 ```
 
-Or apply everything at once:
-```bash
-oc apply -f manifests/
-```
+### 9. First login
 
-### 7. First login
+Visit `https://<ENEO_HOST>`.
 
-Once all pods are Running, visit `https://eneo.apps.<your-cluster-domain>`.
-
-Default credentials (set in `03-configmap.yaml` → `DEFAULT_USER_*`):
-- Email: `admin@example.com`
-- Password: `REPLACE_WITH_INITIAL_PASSWORD` *(the literal placeholder value, if you have not changed it before deploying)*
+Default credentials (set in `manifests/03-configmap.yaml`):
+- Email: `admin@example.com` (or the value you set for `DEFAULT_USER_EMAIL`)
+- Password: the value you set for `DEFAULT_USER_PASSWORD`
 
 **Change the password immediately after first login.**
 
@@ -125,25 +148,26 @@ Default credentials (set in `03-configmap.yaml` → `DEFAULT_USER_*`):
 
 ## Adding AI models
 
-Models are configured through the Eneo admin panel at `https://<your-domain>/admin/models`.
+Models are configured through the Eneo admin panel at `https://<your-domain>/admin/models` or via the API.
 
-Eneo supports OpenAI, Anthropic, Azure OpenAI, Mistral, and self-hosted vLLM endpoints (e.g. KServe InferenceService). For each provider you add through the UI, Eneo stores the API key encrypted with `ENCRYPTION_KEY`.
+Eneo supports OpenAI, Anthropic, Azure OpenAI, Mistral, and self-hosted vLLM endpoints (e.g. KServe InferenceService). `ENCRYPTION_KEY` must be set in `eneo-backend-secret` before adding providers — it encrypts stored API keys in the database.
 
 ### Self-hosted vLLM / KServe models
 
-If your vLLM endpoints use a self-signed TLS certificate (common with KServe InferenceService in OpenShift), LiteLLM's SSL verification must be disabled. This is handled by the `eneo-python-site` ConfigMap (in `03-configmap.yaml`), which injects a `sitecustomize.py` that sets `litellm.ssl_verify = False` at process startup.
+#### SSL bypass for self-signed certificates
 
-**If your vLLM endpoints use a trusted certificate**, remove:
+If your vLLM endpoints present a self-signed TLS certificate (common with KServe InferenceService in OpenShift), LiteLLM's SSL verification must be disabled. The `eneo-python-site` ConfigMap in `03-configmap.yaml` handles this by injecting a `sitecustomize.py` that sets `litellm.ssl_verify = False` at process startup. This is included in the manifests by default.
+
+If your endpoints use a publicly trusted certificate, remove:
 - The `eneo-python-site` ConfigMap from `03-configmap.yaml`
 - The `PYTHONPATH` entry from `eneo-backend-config` in `03-configmap.yaml`
 - The `python-site` volume and volumeMount from `07-backend.yaml` and `08-worker.yaml`
 
-### ServiceAccount token for KServe authentication
+#### ServiceAccount token for KServe authentication
 
-KServe InferenceService endpoints in OpenShift are protected with Kubernetes RBAC. If your vLLM models require a Bearer token, use a long-lived ServiceAccount token Secret:
+KServe InferenceService endpoints in OpenShift require a Kubernetes Bearer token. Create a long-lived ServiceAccount token Secret (Kubernetes auto-rotates the contents):
 
 ```bash
-# Create a long-lived SA token (auto-rotated by Kubernetes)
 oc apply -f - <<EOF
 apiVersion: v1
 kind: Secret
@@ -155,16 +179,70 @@ metadata:
 type: kubernetes.io/service-account-token
 EOF
 
-# Extract the token
-oc get secret eneo-app-sa-token -o jsonpath='{.data.token}' | base64 -d
+sleep 5
+SA_TOKEN=$(oc get secret eneo-app-sa-token -o jsonpath='{.data.token}' | base64 -d)
+echo "Token length: ${#SA_TOKEN} (should be > 0)"
 ```
 
-Use this token as the API key when configuring your vLLM provider in the Eneo admin UI.
+Use this token as the API key when registering a vLLM provider in the Eneo admin UI, or in the API calls below.
 
-**Endpoint format**: KServe predictors listen on HTTPS port 8443. Append `/v1` to the predictor URL:
+**Endpoint format**: KServe predictors expose HTTPS on port 8443 with the path prefix `/v1`:
 ```
 https://<isvc-name>-predictor.<namespace>.svc.cluster.local:8443/v1
 ```
+
+#### Registering a provider via API
+
+```bash
+ENEO_URL=https://<your-eneo-hostname>
+
+# Login
+TOKEN=$(curl -s -X POST "${ENEO_URL}/api/v1/users/login/token/" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "username=admin@example.com&password=<your-password>" \
+  | python3 -c "import json,sys; print(json.load(sys.stdin)['access_token'])")
+
+# Create provider — captures provider ID
+PROVIDER_ID=$(curl -s -X POST "${ENEO_URL}/api/v1/admin/model-providers/" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"name\": \"My vLLM Model\",
+    \"provider_type\": \"hosted_vllm\",
+    \"credentials\": {\"api_key\": \"${SA_TOKEN}\"},
+    \"config\": {
+      \"endpoint\": \"https://<isvc-name>-predictor.<namespace>.svc.cluster.local:8443/v1\",
+      \"model_name\": \"<model-id>\"
+    }
+  }" | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")
+
+# Add as a tenant model
+curl -s -X POST "${ENEO_URL}/api/v1/admin/tenant-models/completion/" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"provider_id\": \"${PROVIDER_ID}\",
+    \"name\": \"<model-id>\",
+    \"display_name\": \"My Model\",
+    \"max_input_tokens\": 128000,
+    \"max_output_tokens\": 4096,
+    \"is_active\": true,
+    \"is_default\": true
+  }" | python3 -m json.tool
+```
+
+### Red Hat Developer Sandbox — hosted models
+
+The sandbox cluster (`sandbox-shared-models` namespace) provides three shared vLLM models. After deploying Eneo, run the provided script to configure them automatically:
+
+```bash
+./scripts/configure-sandbox-models.sh \
+  --namespace rhn-sa-<your-id>-dev \
+  --url https://<your-eneo-hostname> \
+  --password <your-admin-password>
+```
+
+The script creates the SA token Secret, waits for the token to be issued, logs in to Eneo, and registers all three models (Granite 3.1 8B FP8, Nemotron Nano 9B v2 FP8, Qwen3 8B FP8).
 
 ---
 
@@ -173,7 +251,7 @@ https://<isvc-name>-predictor.<namespace>.svc.cluster.local:8443/v1
 The init containers enforce the same dependency chain as the upstream docker-compose:
 
 ```
-postgres + redis  →  db-init (migrations)  →  backend  →  worker + frontend
+postgres + redis  →  pgvector extension  →  db-init (migrations)  →  backend  →  worker + frontend
 ```
 
 ---
@@ -198,7 +276,7 @@ To upgrade:
 
 ```
 manifests/
-├── 00-namespace.yaml      Project namespace
+├── 00-namespace.yaml      Project namespace (skip if deploying to an existing namespace)
 ├── 01-rbac.yaml           ServiceAccount
 ├── 02-secrets.yaml        Secret templates — fill in before applying
 ├── 03-configmap.yaml      Non-sensitive configuration + eneo-python-site (LiteLLM SSL bypass)
@@ -209,4 +287,7 @@ manifests/
 ├── 08-worker.yaml         Worker Deployment
 ├── 09-frontend.yaml       Frontend Deployment + Service
 └── 10-routes.yaml         OpenShift Routes (replaces Traefik)
+
+scripts/
+└── configure-sandbox-models.sh   Configure the three Red Hat Developer Sandbox hosted models
 ```
