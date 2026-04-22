@@ -104,6 +104,8 @@ spec:
               mountPath: /app/data
             - name: temp-files
               mountPath: /tmp
+            - name: python-site
+              mountPath: /etc/python-site
           readinessProbe:
             httpGet:
               path: /openapi.json
@@ -135,6 +137,9 @@ spec:
         - name: temp-files
           persistentVolumeClaim:
             claimName: eneo-temp-files-pvc
+        - name: python-site
+          configMap:
+            name: eneo-python-site
 
 ---
 apiVersion: v1

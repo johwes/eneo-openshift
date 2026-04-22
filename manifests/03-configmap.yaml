@@ -43,6 +43,13 @@ data:
   FEDERATION_PER_TENANT_ENABLED: "false"
   TENANT_CREDENTIALS_ENABLED: "false"
 
+  # PYTHONPATH — points Python to the sitecustomize.py volume defined in the Deployment.
+  # That file sets litellm.ssl_verify=False at startup, required when vLLM endpoints
+  # (e.g. KServe InferenceService) use self-signed TLS certificates.
+  # Remove PYTHONPATH and the eneo-python-site volume/mount if your vLLM endpoints
+  # use a trusted certificate (or are not used at all).
+  PYTHONPATH: "/etc/python-site"
+
   # Feature flags
   USING_ACCESS_MANAGEMENT: "True"
 
@@ -62,6 +69,27 @@ data:
   DEFAULT_USER_NAME: "Admin"
   DEFAULT_USER_EMAIL: "admin@example.com"
   DEFAULT_USER_PASSWORD: "REPLACE_WITH_INITIAL_PASSWORD"
+
+---
+# Python site customization — loaded automatically by Python at startup via PYTHONPATH.
+# Sets litellm.ssl_verify=False so LiteLLM can connect to vLLM endpoints (KServe
+# InferenceService) that present self-signed TLS certificates.
+# Remove this ConfigMap, the PYTHONPATH entry above, and the eneo-python-site
+# volume/mount in 07-backend.yaml and 08-worker.yaml if not needed.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eneo-python-site
+  namespace: eneo
+  labels:
+    app.kubernetes.io/name: eneo
+data:
+  sitecustomize.py: |
+    try:
+        import litellm
+        litellm.ssl_verify = False
+    except ImportError:
+        pass
 
 ---
 # Non-sensitive configuration for the frontend (SvelteKit node adapter).

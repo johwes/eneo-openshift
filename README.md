@@ -59,7 +59,10 @@ POSTGRES_PASSWORD=$(openssl rand -base64 32)
 JWT_SECRET=$(openssl rand -hex 32)
 URL_SIGNING_KEY=$(openssl rand -hex 32)
 ENEO_SUPER_API_KEY=$(openssl rand -hex 32)
+ENCRYPTION_KEY=$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
 ```
+
+`ENCRYPTION_KEY` is required for the admin model-provider UI (it encrypts stored API keys in the database). Generate it as shown above and set it in `eneo-backend-secret`.
 
 > **Never commit the filled-in secrets file to version control.**
 > Use Sealed Secrets, HashiCorp Vault, or OpenShift Secrets Manager instead.
@@ -120,6 +123,51 @@ Default credentials (set in `03-configmap.yaml` → `DEFAULT_USER_*`):
 
 ---
 
+## Adding AI models
+
+Models are configured through the Eneo admin panel at `https://<your-domain>/admin/models`.
+
+Eneo supports OpenAI, Anthropic, Azure OpenAI, Mistral, and self-hosted vLLM endpoints (e.g. KServe InferenceService). For each provider you add through the UI, Eneo stores the API key encrypted with `ENCRYPTION_KEY`.
+
+### Self-hosted vLLM / KServe models
+
+If your vLLM endpoints use a self-signed TLS certificate (common with KServe InferenceService in OpenShift), LiteLLM's SSL verification must be disabled. This is handled by the `eneo-python-site` ConfigMap (in `03-configmap.yaml`), which injects a `sitecustomize.py` that sets `litellm.ssl_verify = False` at process startup.
+
+**If your vLLM endpoints use a trusted certificate**, remove:
+- The `eneo-python-site` ConfigMap from `03-configmap.yaml`
+- The `PYTHONPATH` entry from `eneo-backend-config` in `03-configmap.yaml`
+- The `python-site` volume and volumeMount from `07-backend.yaml` and `08-worker.yaml`
+
+### ServiceAccount token for KServe authentication
+
+KServe InferenceService endpoints in OpenShift are protected with Kubernetes RBAC. If your vLLM models require a Bearer token, use a long-lived ServiceAccount token Secret:
+
+```bash
+# Create a long-lived SA token (auto-rotated by Kubernetes)
+oc apply -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: eneo-app-sa-token
+  namespace: eneo
+  annotations:
+    kubernetes.io/service-account.name: eneo-app
+type: kubernetes.io/service-account-token
+EOF
+
+# Extract the token
+oc get secret eneo-app-sa-token -o jsonpath='{.data.token}' | base64 -d
+```
+
+Use this token as the API key when configuring your vLLM provider in the Eneo admin UI.
+
+**Endpoint format**: KServe predictors listen on HTTPS port 8443. Append `/v1` to the predictor URL:
+```
+https://<isvc-name>-predictor.<namespace>.svc.cluster.local:8443/v1
+```
+
+---
+
 ## Startup order
 
 The init containers enforce the same dependency chain as the upstream docker-compose:
@@ -153,7 +201,7 @@ manifests/
 ├── 00-namespace.yaml      Project namespace
 ├── 01-rbac.yaml           ServiceAccount
 ├── 02-secrets.yaml        Secret templates — fill in before applying
-├── 03-configmap.yaml      Non-sensitive configuration
+├── 03-configmap.yaml      Non-sensitive configuration + eneo-python-site (LiteLLM SSL bypass)
 ├── 04-pvc.yaml            PersistentVolumeClaims
 ├── 05-postgres.yaml       PostgreSQL StatefulSet + Service
 ├── 06-redis.yaml          Redis StatefulSet + Service
