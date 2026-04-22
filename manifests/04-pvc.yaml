@@ -50,7 +50,7 @@ spec:
   resources:
     requests:
       storage: 20Gi
-  # storageClassName: "efs-sc"  # Example for OpenShift Data Foundation
+  storageClassName: "efs-sc"  # Example for OpenShift Data Foundation
 
 ---
 # Shared temp/exports directory (/tmp) — shared between the backend and worker pods.
@@ -70,4 +70,4 @@ spec:
   resources:
     requests:
       storage: 5Gi
-  # storageClassName: "efs-sc"
+  storageClassName: "efs-sc"
