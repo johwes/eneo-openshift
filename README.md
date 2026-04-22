@@ -103,7 +103,7 @@ On **Red Hat Developer Sandbox** (AWS-backed): use `efs-sc`.
 Apply RBAC, secrets, config, PVCs, postgres, and redis — then **wait for PostgreSQL before continuing**:
 
 ```bash
-oc apply -f manifests/01-rbac.yaml
+oc apply -f manifests/01-serviceaccount.yaml
 oc apply -f manifests/02-secrets.yaml
 oc apply -f manifests/03-configmap.yaml
 oc apply -f manifests/04-pvc.yaml
@@ -277,7 +277,7 @@ To upgrade:
 ```
 manifests/
 ├── 00-namespace.yaml      Project namespace (skip if deploying to an existing namespace)
-├── 01-rbac.yaml           ServiceAccount
+├── 01-serviceaccount.yaml           ServiceAccount
 ├── 02-secrets.yaml        Secret templates — fill in before applying
 ├── 03-configmap.yaml      Non-sensitive configuration + eneo-python-site (LiteLLM SSL bypass)
 ├── 04-pvc.yaml            PersistentVolumeClaims
