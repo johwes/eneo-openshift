@@ -1,0 +1,129 @@
+# Eneo worker — ARQ background task processor (document ingestion, web
+# crawling, transcription, audit log exports).
+#
+# Uses the same image as the backend. RUN_AS_WORKER=true tells run.sh to
+# start the ARQ worker instead of the Gunicorn HTTP server.
+#
+# Shares eneo-backend-data-pvc and eneo-temp-files-pvc with the backend
+# Deployment. Both PVCs must use a ReadWriteMany StorageClass.
+#
+# Init containers wait for postgres and redis to be ready. Migrations are
+# handled exclusively by the backend's db-init init container.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eneo-worker
+  namespace: eneo
+  labels:
+    app.kubernetes.io/name: eneo
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: eneo
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: eneo
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: eneo-app
+      securityContext:
+        runAsNonRoot: true
+      initContainers:
+        - name: wait-for-postgres
+          image: ghcr.io/eneo-ai/eneo-backend:latest
+          command:
+            - sh
+            - -c
+            - |
+              until python -c "import socket; socket.create_connection(('eneo-postgres', 5432), timeout=5)" 2>/dev/null; do
+                echo "Waiting for postgres..."
+                sleep 3
+              done
+              echo "Postgres is ready."
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+
+        - name: wait-for-redis
+          image: ghcr.io/eneo-ai/eneo-backend:latest
+          command:
+            - sh
+            - -c
+            - |
+              until python -c "import socket; socket.create_connection(('eneo-redis', 6379), timeout=5)" 2>/dev/null; do
+                echo "Waiting for redis..."
+                sleep 3
+              done
+              echo "Redis is ready."
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+
+        - name: wait-for-backend
+          image: ghcr.io/eneo-ai/eneo-backend:latest
+          command:
+            - sh
+            - -c
+            - |
+              until python -c "
+              import urllib.request, urllib.error
+              try:
+                  urllib.request.urlopen('http://eneo-backend:8000/version', timeout=5)
+              except urllib.error.HTTPError:
+                  pass  # Any HTTP response means backend is up
+              " 2>/dev/null; do
+                echo "Waiting for backend (db migrations to complete)..."
+                sleep 5
+              done
+              echo "Backend is ready."
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+
+      containers:
+        - name: worker
+          image: ghcr.io/eneo-ai/eneo-backend:latest
+          env:
+            - name: RUN_AS_WORKER
+              value: "true"
+          envFrom:
+            - secretRef:
+                name: eneo-backend-secret
+            - configMapRef:
+                name: eneo-backend-config
+          volumeMounts:
+            - name: backend-data
+              mountPath: /app/data
+            - name: temp-files
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+
+      volumes:
+        - name: backend-data
+          persistentVolumeClaim:
+            claimName: eneo-backend-data-pvc
+        - name: temp-files
+          persistentVolumeClaim:
+            claimName: eneo-temp-files-pvc

@@ -1,0 +1,100 @@
+# PostgreSQL 15 with pgvector — Red Hat / SCLORG base image.
+#
+# Image source: https://github.com/rh-aiservices-bu/llm-on-openshift/tree/main/vector-databases/pgvector
+# Built on quay.io/sclorg/postgresql-15-c9s which runs as UID 26 with GID 0,
+# fully compatible with OpenShift's restricted SCC — no anyuid required.
+#
+# NOTE — PostgreSQL version:
+#   This image provides PostgreSQL 15 with pgvector 0.5.1.
+#   Eneo's upstream docker-compose uses PostgreSQL 16 (pgvector/pgvector:pg16).
+#   PG15 is generally compatible but test thoroughly. If you need PG16 or a
+#   newer pgvector version, build a custom image by adapting the Containerfile
+#   at the URL above to use quay.io/sclorg/postgresql-16-c9s as the base.
+#
+# Env var names differ from the community postgres image:
+#   POSTGRESQL_USER     (not POSTGRES_USER)
+#   POSTGRESQL_PASSWORD (not POSTGRES_PASSWORD)
+#   POSTGRESQL_DATABASE (not POSTGRES_DB)
+# The backend's POSTGRES_* env vars are separate and connect to the same DB.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: eneo-postgres
+  namespace: eneo
+  labels:
+    app.kubernetes.io/name: eneo
+    app.kubernetes.io/component: postgres
+spec:
+  serviceName: eneo-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: eneo
+      app.kubernetes.io/component: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: eneo
+        app.kubernetes.io/component: postgres
+    spec:
+      serviceAccountName: eneo-app
+      containers:
+        - name: postgres
+          image: quay.io/rh-aiservices-bu/postgresql-15-pgvector-c9s:latest
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: eneo-db-secret
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/pgsql/data
+          readinessProbe:
+            exec:
+              command:
+                - /usr/libexec/check-container
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 6
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - /usr/libexec/check-container
+                - --live
+            initialDelaySeconds: 120
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 10
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: eneo-postgres-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eneo-postgres
+  namespace: eneo
+  labels:
+    app.kubernetes.io/name: eneo
+    app.kubernetes.io/component: postgres
+spec:
+  selector:
+    app.kubernetes.io/name: eneo
+    app.kubernetes.io/component: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+  type: ClusterIP
