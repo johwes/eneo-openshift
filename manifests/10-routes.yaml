@@ -1,0 +1,131 @@
+# OpenShift Routes — replaces Traefik from the upstream docker-compose.
+#
+# Replace REPLACE_WITH_YOUR_CLUSTER_DOMAIN with your actual cluster domain.
+# The typical format is: eneo.apps.<cluster-name>.<base-domain>
+#
+# TLS is terminated at the OpenShift router (edge termination). If the cluster
+# has a wildcard certificate for *.apps.<cluster-domain>, no additional TLS
+# config is needed. To supply a custom certificate, add a spec.tls block with
+# certificate, key, and caCertificate fields to each Route.
+#
+# Routing logic (mirrors the original Traefik rules):
+#   /api, /docs, /openapi.json, /version  →  eneo-backend:8000
+#   / (everything else)                   →  eneo-frontend:3000
+#
+# OpenShift's HAProxy router matches more specific paths first, so the backend
+# routes take priority over the catch-all frontend route.
+
+---
+# API endpoints
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: eneo-backend-api
+  namespace: eneo
+  labels:
+    app.kubernetes.io/name: eneo
+    app.kubernetes.io/component: backend
+spec:
+  host: eneo.apps.REPLACE_WITH_YOUR_CLUSTER_DOMAIN
+  path: /api
+  to:
+    kind: Service
+    name: eneo-backend
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+
+---
+# Swagger UI
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: eneo-backend-docs
+  namespace: eneo
+  labels:
+    app.kubernetes.io/name: eneo
+    app.kubernetes.io/component: backend
+spec:
+  host: eneo.apps.REPLACE_WITH_YOUR_CLUSTER_DOMAIN
+  path: /docs
+  to:
+    kind: Service
+    name: eneo-backend
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+
+---
+# OpenAPI spec
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: eneo-backend-openapi
+  namespace: eneo
+  labels:
+    app.kubernetes.io/name: eneo
+    app.kubernetes.io/component: backend
+spec:
+  host: eneo.apps.REPLACE_WITH_YOUR_CLUSTER_DOMAIN
+  path: /openapi.json
+  to:
+    kind: Service
+    name: eneo-backend
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+
+---
+# Version endpoint
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: eneo-backend-version
+  namespace: eneo
+  labels:
+    app.kubernetes.io/name: eneo
+    app.kubernetes.io/component: backend
+spec:
+  host: eneo.apps.REPLACE_WITH_YOUR_CLUSTER_DOMAIN
+  path: /version
+  to:
+    kind: Service
+    name: eneo-backend
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+
+---
+# Frontend catch-all — must be the last route applied so path-specific
+# backend routes take priority.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: eneo-frontend
+  namespace: eneo
+  labels:
+    app.kubernetes.io/name: eneo
+    app.kubernetes.io/component: frontend
+spec:
+  host: eneo.apps.REPLACE_WITH_YOUR_CLUSTER_DOMAIN
+  to:
+    kind: Service
+    name: eneo-frontend
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

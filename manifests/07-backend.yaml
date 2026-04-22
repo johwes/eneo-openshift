@@ -1,0 +1,156 @@
+# Eneo backend — FastAPI application served by Uvicorn/Gunicorn.
+#
+# Startup order is enforced by init containers:
+#   1. wait-for-postgres — polls until PostgreSQL accepts connections
+#   2. wait-for-redis    — polls until Redis responds to PING
+#   3. db-init           — runs init_db.py (Alembic migrations + default user/tenant)
+#
+# The image runs as UID 1000 / GID 0 and follows OpenShift's arbitrary-UID
+# pattern, so it works under the default restricted SCC without modification.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eneo-backend
+  namespace: eneo
+  labels:
+    app.kubernetes.io/name: eneo
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: eneo
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: eneo
+        app.kubernetes.io/component: backend
+    spec:
+      serviceAccountName: eneo-app
+      securityContext:
+        runAsNonRoot: true
+      initContainers:
+        - name: wait-for-postgres
+          image: ghcr.io/eneo-ai/eneo-backend:latest
+          command:
+            - sh
+            - -c
+            - |
+              until python -c "import socket; socket.create_connection(('eneo-postgres', 5432), timeout=5)" 2>/dev/null; do
+                echo "Waiting for postgres..."
+                sleep 3
+              done
+              echo "Postgres is ready."
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+
+        - name: wait-for-redis
+          image: ghcr.io/eneo-ai/eneo-backend:latest
+          command:
+            - sh
+            - -c
+            - |
+              until python -c "import socket; socket.create_connection(('eneo-redis', 6379), timeout=5)" 2>/dev/null; do
+                echo "Waiting for redis..."
+                sleep 3
+              done
+              echo "Redis is ready."
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+
+        - name: db-init
+          image: ghcr.io/eneo-ai/eneo-backend:latest
+          command:
+            - python
+            - init_db.py
+          envFrom:
+            - secretRef:
+                name: eneo-backend-secret
+            - configMapRef:
+                name: eneo-backend-config
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+      containers:
+        - name: backend
+          image: ghcr.io/eneo-ai/eneo-backend:latest
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: eneo-backend-secret
+            - configMapRef:
+                name: eneo-backend-config
+          volumeMounts:
+            - name: backend-data
+              mountPath: /app/data
+            - name: temp-files
+              mountPath: /tmp
+          readinessProbe:
+            httpGet:
+              path: /openapi.json
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
+            timeoutSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /openapi.json
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            failureThreshold: 3
+            timeoutSeconds: 10
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+
+      volumes:
+        - name: backend-data
+          persistentVolumeClaim:
+            claimName: eneo-backend-data-pvc
+        - name: temp-files
+          persistentVolumeClaim:
+            claimName: eneo-temp-files-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eneo-backend
+  namespace: eneo
+  labels:
+    app.kubernetes.io/name: eneo
+    app.kubernetes.io/component: backend
+spec:
+  selector:
+    app.kubernetes.io/name: eneo
+    app.kubernetes.io/component: backend
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP

@@ -1,0 +1,113 @@
+# Eneo frontend — SvelteKit application served by the Node.js adapter.
+#
+# The image runs as UID 1000 (node user) / GID 1000. The entire /app
+# filesystem is owned by root:root with 755/644 permissions, making it
+# read-only for the node user. Since the SvelteKit node adapter only reads
+# its own build output at runtime, no write access to /app is required, and
+# the image works under the default restricted SCC.
+#
+# No persistent volumes are needed — the frontend is fully stateless.
+# All environment variables are read from process.env at runtime (node adapter).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eneo-frontend
+  namespace: eneo
+  labels:
+    app.kubernetes.io/name: eneo
+    app.kubernetes.io/component: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: eneo
+      app.kubernetes.io/component: frontend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: eneo
+        app.kubernetes.io/component: frontend
+    spec:
+      serviceAccountName: eneo-app
+      securityContext:
+        runAsNonRoot: true
+      initContainers:
+        - name: wait-for-backend
+          image: ghcr.io/eneo-ai/eneo-backend:latest
+          command:
+            - sh
+            - -c
+            - |
+              until python -c "
+              import urllib.request, urllib.error
+              try:
+                  urllib.request.urlopen('http://eneo-backend:8000/version', timeout=5)
+              except urllib.error.HTTPError:
+                  pass
+              " 2>/dev/null; do
+                echo "Waiting for backend..."
+                sleep 5
+              done
+              echo "Backend is ready."
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+
+      containers:
+        - name: frontend
+          image: ghcr.io/eneo-ai/eneo-frontend:latest
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: eneo-frontend-config
+            - secretRef:
+                name: eneo-frontend-secret
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 6
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 3
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eneo-frontend
+  namespace: eneo
+  labels:
+    app.kubernetes.io/name: eneo
+    app.kubernetes.io/component: frontend
+spec:
+  selector:
+    app.kubernetes.io/name: eneo
+    app.kubernetes.io/component: frontend
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+  type: ClusterIP

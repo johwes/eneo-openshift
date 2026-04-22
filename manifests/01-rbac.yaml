@@ -1,0 +1,11 @@
+# Single ServiceAccount for all Eneo components.
+# All images — backend, worker, frontend, postgres (SCLORG), and redis (SCLORG) —
+# follow OpenShift's GID 0 / arbitrary-UID pattern and work under the default
+# restricted SCC. No anyuid or elevated SCC is required.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eneo-app
+  namespace: eneo
+  labels:
+    app.kubernetes.io/name: eneo

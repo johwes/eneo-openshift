@@ -1,0 +1,73 @@
+# PostgreSQL data — single pod, ReadWriteOnce is sufficient.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: eneo-postgres-pvc
+  namespace: eneo
+  labels:
+    app.kubernetes.io/name: eneo
+    app.kubernetes.io/component: postgres
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  # storageClassName: ""  # Omit to use the cluster default StorageClass
+
+---
+# Redis data — single pod, ReadWriteOnce is sufficient.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: eneo-redis-pvc
+  namespace: eneo
+  labels:
+    app.kubernetes.io/name: eneo
+    app.kubernetes.io/component: redis
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+
+---
+# Backend application data (/app/data) — shared between the backend and worker pods.
+# Requires a ReadWriteMany-capable StorageClass (e.g. ODF/CephFS, NFS, Azure Files, EFS).
+# The worker reads and writes processed documents here alongside the backend.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: eneo-backend-data-pvc
+  namespace: eneo
+  labels:
+    app.kubernetes.io/name: eneo
+    app.kubernetes.io/component: backend
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 20Gi
+  # storageClassName: "ocs-storagecluster-cephfs"  # Example for OpenShift Data Foundation
+
+---
+# Shared temp/exports directory (/tmp) — shared between the backend and worker pods.
+# Auto-cleaned by the application after 24 hours.
+# Also requires ReadWriteMany for the same reason as eneo-backend-data-pvc.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: eneo-temp-files-pvc
+  namespace: eneo
+  labels:
+    app.kubernetes.io/name: eneo
+    app.kubernetes.io/component: backend
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+  # storageClassName: "ocs-storagecluster-cephfs"

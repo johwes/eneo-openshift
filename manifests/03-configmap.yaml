@@ -1,0 +1,88 @@
+# Non-sensitive configuration for the backend.
+# Sensitive values (passwords, keys, API keys) live in 02-secrets.yaml.
+#
+# Replace REPLACE_WITH_YOUR_DOMAIN with your actual hostname everywhere it appears.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eneo-backend-config
+  namespace: eneo
+  labels:
+    app.kubernetes.io/name: eneo
+data:
+  # Infrastructure — service DNS names inside the cluster
+  POSTGRES_HOST: "eneo-postgres"
+  POSTGRES_PORT: "5432"
+  REDIS_HOST: "eneo-redis"
+  REDIS_PORT: "6379"
+
+  # API
+  API_PREFIX: "/api/v1"
+  API_KEY_LENGTH: "64"
+  API_KEY_HEADER_NAME: "X-API-Key"
+
+  # JWT (non-secret fields)
+  JWT_AUDIENCE: "*"
+  JWT_ISSUER: "ENEO"
+  JWT_EXPIRY_TIME: "86400"
+  JWT_ALGORITHM: "HS256"
+  JWT_TOKEN_PREFIX: "Bearer"
+
+  # OIDC — public fields (secrets go in eneo-backend-secret)
+  # The externally reachable URL where users access Eneo.
+  # Must match what is registered as the redirect_uri in your IdP.
+  PUBLIC_ORIGIN: "https://REPLACE_WITH_YOUR_DOMAIN"
+  OIDC_DISCOVERY_ENDPOINT: ""
+  OIDC_CLIENT_ID: ""
+  OIDC_STATE_TTL_SECONDS: "600"
+  OIDC_REDIRECT_GRACE_PERIOD_SECONDS: "600"
+  OIDC_CLOCK_LEEWAY_SECONDS: "120"
+  STRICT_OIDC_REDIRECT_VALIDATION: "true"
+
+  # Multi-tenancy (set to "true" and provide ENCRYPTION_KEY in secret to enable)
+  FEDERATION_PER_TENANT_ENABLED: "false"
+  TENANT_CREDENTIALS_ENABLED: "false"
+
+  # Feature flags
+  USING_ACCESS_MANAGEMENT: "True"
+
+  # Azure OpenAI (non-secret fields — key goes in eneo-backend-secret)
+  AZURE_API_VERSION: "2024-02-15-preview"
+
+  # Upload limits (bytes)
+  UPLOAD_MAX_FILE_SIZE: "10485760"
+  UPLOAD_FILE_TO_SESSION_MAX_SIZE: "10485760"
+  UPLOAD_IMAGE_TO_SESSION_MAX_SIZE: "10485760"
+  TRANSCRIPTION_MAX_FILE_SIZE: "209715200"
+
+  # Default tenant and user created on first startup.
+  # Change DEFAULT_USER_PASSWORD immediately after first login.
+  DEFAULT_TENANT_NAME: "DefaultTenant"
+  DEFAULT_TENANT_QUOTA_LIMIT: "10737418240"
+  DEFAULT_USER_NAME: "Admin"
+  DEFAULT_USER_EMAIL: "admin@example.com"
+  DEFAULT_USER_PASSWORD: "REPLACE_WITH_INITIAL_PASSWORD"
+
+---
+# Non-sensitive configuration for the frontend (SvelteKit node adapter).
+# JWT_SECRET lives in eneo-frontend-secret.
+#
+# Replace REPLACE_WITH_YOUR_DOMAIN with your actual hostname everywhere it appears.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eneo-frontend-config
+  namespace: eneo
+  labels:
+    app.kubernetes.io/name: eneo
+data:
+  # Server-to-server URL used by SvelteKit SSR (never leaves the cluster)
+  ENEO_BACKEND_SERVER_URL: "http://eneo-backend:8000"
+
+  # Public-facing URL used by the browser
+  ENEO_BACKEND_URL: "https://REPLACE_WITH_YOUR_DOMAIN"
+  PUBLIC_ENEO_BACKEND_URL: "https://REPLACE_WITH_YOUR_DOMAIN"
+
+  # Origin for cookies, CORS, and OIDC redirect_uri construction
+  ORIGIN: "https://REPLACE_WITH_YOUR_DOMAIN"
+  PUBLIC_ORIGIN: "https://REPLACE_WITH_YOUR_DOMAIN"
