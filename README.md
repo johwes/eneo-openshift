@@ -2,13 +2,13 @@
 
 OpenShift manifests for deploying [Eneo](https://github.com/eneo-ai/eneo) — the open-source AI platform for the public sector.
 
-Traefik is replaced by OpenShift Routes. All upstream images are used as-is (no rebuild required).
+Traefik is replaced by OpenShift Routes. 
 
 ---
 
 ## Prerequisites
 
-- OpenShift 4.x cluster with cluster-admin access (for SCC binding)
+- OpenShift 4.x cluster
 - A ReadWriteMany-capable StorageClass for the shared volumes (e.g. ODF/CephFS, NFS)
 - At least one LLM provider API key (OpenAI, Anthropic, Azure, or a self-hosted model)
 - An OIDC identity provider, or use the built-in username/password login
