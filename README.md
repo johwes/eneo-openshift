@@ -68,8 +68,13 @@ export URL_SIGNING_KEY=$(openssl rand -hex 32)
 export ENCRYPTION_KEY=$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
 export ENEO_SUPER_API_KEY=$(openssl rand -hex 32)
 
-envsubst '${POSTGRES_PASSWORD} ${JWT_SECRET} ${URL_SIGNING_KEY} ${ENCRYPTION_KEY} ${ENEO_SUPER_API_KEY}' \
-  < manifests/02-secrets.yaml | oc apply -f -
+python3 -c "
+import os, sys
+t = open('manifests/02-secrets.yaml').read()
+for k in ['POSTGRES_PASSWORD','JWT_SECRET','URL_SIGNING_KEY','ENCRYPTION_KEY','ENEO_SUPER_API_KEY']:
+    t = t.replace('\${' + k + '}', os.environ[k])
+sys.stdout.write(t)
+" | oc apply -f -
 ```
 
 `ENCRYPTION_KEY` is **required** — without it, the admin model-provider UI cannot save API keys.
