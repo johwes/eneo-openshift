@@ -8,9 +8,9 @@ Traefik is replaced by OpenShift Routes.
 
 ## Prerequisites
 
-- OpenShift 4.x cluster
+- OpenShift 4.x cluster - Instructions assume Red Hat developer Sandbox - https://sandbox.redhat.com/
 - A ReadWriteMany-capable StorageClass for the shared volumes (e.g. ODF/CephFS, NFS, EFS)
-- At least one LLM provider API key (OpenAI, Anthropic, Azure, or a self-hosted vLLM endpoint)
+- Thie instructions assume Red Hat Developer Sandbox environment which includes 3 small models
 - An OIDC identity provider, or use the built-in username/password login
 
 ---
@@ -36,6 +36,12 @@ All components run under the default **restricted SCC** — no anyuid or elevate
 ---
 
 ## Deployment steps
+
+### 0. Clone this repo
+**git clone ...:**
+```bash
+git clone https://github.com/johwes/eneo-openshift.git
+```
 
 ### 1. Create or join a project
 
