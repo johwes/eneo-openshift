@@ -59,21 +59,22 @@ Skip `manifests/00-namespace.yaml` when applying — it creates a Namespace obje
 
 ### 2. Configure secrets
 
-Copy `manifests/02-secrets.yaml`, fill in all `REPLACE_WITH_*` values, and keep the filled file outside version control.
+Generate strong values and apply the secrets in one step — secrets never need to be written to disk:
 
-Generate strong values:
 ```bash
-POSTGRES_PASSWORD=$(openssl rand -base64 32)
-JWT_SECRET=$(openssl rand -hex 32)
-URL_SIGNING_KEY=$(openssl rand -hex 32)
-ENCRYPTION_KEY=$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
-ENEO_SUPER_API_KEY=$(openssl rand -hex 32)
+export POSTGRES_PASSWORD=$(openssl rand -hex 32)
+export JWT_SECRET=$(openssl rand -hex 32)
+export URL_SIGNING_KEY=$(openssl rand -hex 32)
+export ENCRYPTION_KEY=$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
+export ENEO_SUPER_API_KEY=$(openssl rand -hex 32)
+
+envsubst '${POSTGRES_PASSWORD} ${JWT_SECRET} ${URL_SIGNING_KEY} ${ENCRYPTION_KEY} ${ENEO_SUPER_API_KEY}' \
+  < manifests/02-secrets.yaml | oc apply -f -
 ```
 
 `ENCRYPTION_KEY` is **required** — without it, the admin model-provider UI cannot save API keys.
 
-> **Never commit the filled-in secrets file to version control.**
-> Use Sealed Secrets, HashiCorp Vault, or OpenShift Secrets Manager instead.
+> If you prefer Sealed Secrets, HashiCorp Vault, or OpenShift Secrets Manager, substitute the generated values there instead of piping to `oc apply`.
 
 ### 3. Set the initial admin password
 
@@ -110,7 +111,6 @@ Apply RBAC, secrets, config, PVCs, postgres, and redis — then **wait for Postg
 
 ```bash
 oc apply -f manifests/01-serviceaccount.yaml
-oc apply -f manifests/02-secrets.yaml
 oc apply -f manifests/03-configmap.yaml
 oc apply -f manifests/04-pvc.yaml
 oc apply -f manifests/05-postgres.yaml
