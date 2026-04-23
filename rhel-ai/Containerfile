@@ -5,9 +5,9 @@
 # GPU drivers and a vLLM runtime tuned for the target hardware.
 #
 # Build for your hardware:
-#   NVIDIA:       podman build --build-arg BASE=registry.redhat.io/rhelai1/bootc-nvidia-rhel9:1.4 -t eneo-rhelai .
-#   AMD (ROCm):   podman build --build-arg BASE=registry.redhat.io/rhelai1/bootc-amd-rhel9:1.4   -t eneo-rhelai .
-#   Intel Gaudi:  podman build --build-arg BASE=registry.redhat.io/rhelai1/bootc-intel-gaudi-rhel9:1.4 -t eneo-rhelai .
+#   NVIDIA:       podman build --build-arg BASE=registry.redhat.io/rhelai1/bootc-nvidia-rhel9:1.5 -t eneo-rhelai .
+#   AMD (ROCm):   podman build --build-arg BASE=registry.redhat.io/rhelai1/bootc-amd-rhel9:1.5   -t eneo-rhelai .
+#   Intel Gaudi:  podman build --build-arg BASE=registry.redhat.io/rhelai1/bootc-intel-gaudi-rhel9:1.5 -t eneo-rhelai .
 #
 # Verify the exact base image tags at: https://catalog.redhat.com/software/containers/search?q=rhelai
 #
@@ -18,7 +18,7 @@
 #   eneo-setup          # generates secrets, creates /etc/eneo/env
 #   systemctl start eneo-caddy
 
-ARG BASE=registry.redhat.io/rhelai1/bootc-nvidia-rhel9:1.4
+ARG BASE=registry.redhat.io/rhelai1/bootc-nvidia-rhel9:1.5
 FROM ${BASE}
 
 # Quadlet unit files — systemd picks these up automatically on boot
