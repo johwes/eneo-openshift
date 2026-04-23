@@ -46,19 +46,17 @@ cd eneo-openshift
 
 If you already have a local copy, run `git pull` first — the manifests must match the version described in these instructions.
 
-### 1. Create or join a project
+### 1. Set your active project
 
-**New project:**
+The manifests contain no hardcoded namespace — `oc` uses whichever project is currently active.
+
+Find and switch to your project:
 ```bash
-oc new-project eneo
+oc get projects
+oc project <your-project-name>
 ```
 
-**Existing namespace** (e.g. Red Hat Developer Sandbox, where you cannot create new projects):
-```bash
-NAMESPACE=<your-namespace>   # e.g. rhn-sa-johndoe-dev
-find manifests/ -name '*.yaml' -exec sed -i "s/namespace: eneo/namespace: ${NAMESPACE}/g" {} \;
-```
-Skip `manifests/00-namespace.yaml` when applying — it creates a Namespace object that already exists.
+On **Red Hat Developer Sandbox** your project name is derived from your username (e.g. `rhn-sa-johndoe-dev`). You cannot create new projects in the sandbox, so just switch to the one you have.
 
 ### 2. Configure secrets
 
@@ -201,7 +199,6 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: eneo-app-sa-token
-  namespace: eneo
   annotations:
     kubernetes.io/service-account.name: eneo-app
 type: kubernetes.io/service-account-token

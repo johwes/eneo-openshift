@@ -21,7 +21,6 @@ apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
   name: eneo-backend-api
-  namespace: eneo
   labels:
     app.kubernetes.io/name: eneo
     app.kubernetes.io/component: backend
@@ -44,7 +43,6 @@ apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
   name: eneo-backend-docs
-  namespace: eneo
   labels:
     app.kubernetes.io/name: eneo
     app.kubernetes.io/component: backend
@@ -67,7 +65,6 @@ apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
   name: eneo-backend-openapi
-  namespace: eneo
   labels:
     app.kubernetes.io/name: eneo
     app.kubernetes.io/component: backend
@@ -90,7 +87,6 @@ apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
   name: eneo-backend-version
-  namespace: eneo
   labels:
     app.kubernetes.io/name: eneo
     app.kubernetes.io/component: backend
@@ -114,7 +110,6 @@ apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
   name: eneo-frontend
-  namespace: eneo
   labels:
     app.kubernetes.io/name: eneo
     app.kubernetes.io/component: frontend

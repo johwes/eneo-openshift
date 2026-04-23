@@ -13,7 +13,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: eneo-worker
-  namespace: eneo
   labels:
     app.kubernetes.io/name: eneo
     app.kubernetes.io/component: worker
