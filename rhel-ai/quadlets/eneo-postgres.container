@@ -1,0 +1,26 @@
+[Unit]
+Description=Eneo PostgreSQL with pgvector
+After=network-online.target
+
+[Container]
+Image=docker.io/pgvector/pgvector:pg16-bookworm
+ContainerName=eneo-postgres
+Network=eneo.network
+Volume=eneo-postgres-data.volume:/var/lib/postgresql/data
+
+# postgres reads POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB from the env file.
+# The initial user is a superuser, so init_db.py can run CREATE EXTENSION vector.
+EnvironmentFile=/etc/eneo/env
+
+HealthCmd=pg_isready -U eneo -d eneo
+HealthInterval=5s
+HealthTimeout=3s
+HealthStartPeriod=15s
+HealthRetries=5
+
+[Service]
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

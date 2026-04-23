@@ -1,0 +1,17 @@
+[Unit]
+Description=Eneo frontend (SvelteKit)
+After=eneo-backend.service
+Requires=eneo-backend.service
+
+[Container]
+Image=ghcr.io/eneo-ai/eneo-frontend:latest
+ContainerName=eneo-frontend
+Network=eneo.network
+EnvironmentFile=/etc/eneo/env
+
+[Service]
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

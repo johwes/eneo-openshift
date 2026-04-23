@@ -1,0 +1,24 @@
+[Unit]
+Description=Eneo Caddy reverse proxy
+After=eneo-frontend.service eneo-backend.service
+Requires=eneo-frontend.service eneo-backend.service
+
+[Container]
+Image=docker.io/caddy:alpine
+ContainerName=eneo-caddy
+Network=eneo.network
+EnvironmentFile=/etc/eneo/env
+
+Volume=/etc/eneo/Caddyfile:/etc/caddy/Caddyfile:ro
+Volume=eneo-caddy-data.volume:/data
+
+PublishPort=80:80
+PublishPort=443:443
+PublishPort=443:443/udp
+
+[Service]
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,20 @@
+[Unit]
+Description=Eneo ARQ worker (document ingestion, transcription, exports)
+After=eneo-db-init.service eneo-redis.service
+Requires=eneo-db-init.service eneo-redis.service
+
+[Container]
+Image=ghcr.io/eneo-ai/eneo-backend:latest
+Network=eneo.network
+EnvironmentFile=/etc/eneo/env
+Environment=RUN_AS_WORKER=true
+
+Volume=eneo-backend-data.volume:/app/data
+Volume=eneo-temp-files.volume:/tmp
+
+[Service]
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

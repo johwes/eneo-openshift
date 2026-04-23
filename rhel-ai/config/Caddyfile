@@ -1,0 +1,8 @@
+{$ENEO_HOST} {
+    # Backend handles API, docs, and the OpenAPI spec
+    @backend path /api/* /docs /docs/* /openapi.json /version /redoc
+    reverse_proxy @backend eneo-backend:8000
+
+    # Everything else is the SvelteKit frontend
+    reverse_proxy * eneo-frontend:3000
+}

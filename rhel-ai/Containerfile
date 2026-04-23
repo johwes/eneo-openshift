@@ -1,0 +1,33 @@
+# Eneo on RHEL AI — bootc image
+#
+# Layers Eneo (postgres, redis, backend, worker, frontend, caddy) as Podman
+# quadlets on top of the RHEL AI bootc base image. The base image provides
+# GPU drivers and a vLLM runtime tuned for the target hardware.
+#
+# Build for your hardware:
+#   NVIDIA:       podman build --build-arg BASE=registry.redhat.io/rhelai1/bootc-nvidia-rhel9:1.4 -t eneo-rhelai .
+#   AMD (ROCm):   podman build --build-arg BASE=registry.redhat.io/rhelai1/bootc-amd-rhel9:1.4   -t eneo-rhelai .
+#   Intel Gaudi:  podman build --build-arg BASE=registry.redhat.io/rhelai1/bootc-intel-gaudi-rhel9:1.4 -t eneo-rhelai .
+#
+# Verify the exact base image tags at: https://catalog.redhat.com/software/containers/search?q=rhelai
+#
+# Deploy to bare metal or VM:
+#   bootc install --target-imgref eneo-rhelai /dev/sdX
+#
+# Post-install (first boot):
+#   eneo-setup          # generates secrets, creates /etc/eneo/env
+#   systemctl start eneo-caddy
+
+ARG BASE=registry.redhat.io/rhelai1/bootc-nvidia-rhel9:1.4
+FROM ${BASE}
+
+# Quadlet unit files — systemd picks these up automatically on boot
+COPY quadlets/ /etc/containers/systemd/
+
+# Caddy reverse proxy config
+RUN mkdir -p /etc/eneo
+COPY config/Caddyfile /etc/eneo/Caddyfile
+
+# First-boot setup script
+COPY scripts/eneo-setup /usr/local/bin/eneo-setup
+RUN chmod +x /usr/local/bin/eneo-setup

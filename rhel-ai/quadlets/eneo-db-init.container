@@ -1,0 +1,17 @@
+[Unit]
+Description=Eneo database migrations (Alembic + default tenant/user)
+After=eneo-postgres.service eneo-redis.service
+Requires=eneo-postgres.service eneo-redis.service
+
+[Container]
+Image=ghcr.io/eneo-ai/eneo-backend:latest
+Network=eneo.network
+EnvironmentFile=/etc/eneo/env
+Exec=python init_db.py
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Wait for postgres to be ready before running migrations.
+# podman exec reaches the named container on the host side.
+ExecStartPre=/bin/sh -c "until podman exec eneo-postgres pg_isready -U eneo -d eneo 2>/dev/null; do sleep 3; done"

@@ -1,0 +1,16 @@
+[Unit]
+Description=Eneo Redis
+After=network-online.target
+
+[Container]
+Image=docker.io/redis:7-alpine
+ContainerName=eneo-redis
+Network=eneo.network
+Volume=eneo-redis-data.volume:/data
+
+[Service]
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

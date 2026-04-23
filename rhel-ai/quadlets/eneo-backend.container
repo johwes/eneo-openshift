@@ -1,0 +1,26 @@
+[Unit]
+Description=Eneo backend API
+After=eneo-db-init.service eneo-redis.service
+Requires=eneo-db-init.service eneo-redis.service
+
+[Container]
+Image=ghcr.io/eneo-ai/eneo-backend:latest
+ContainerName=eneo-backend
+Network=eneo.network
+EnvironmentFile=/etc/eneo/env
+
+Volume=eneo-backend-data.volume:/app/data
+Volume=eneo-temp-files.volume:/tmp
+
+HealthCmd=curl -sf http://localhost:8000/openapi.json
+HealthInterval=10s
+HealthTimeout=10s
+HealthStartPeriod=30s
+HealthRetries=6
+
+[Service]
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target
