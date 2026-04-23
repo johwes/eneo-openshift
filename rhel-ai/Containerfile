@@ -24,9 +24,13 @@ FROM ${BASE}
 # Quadlet unit files — systemd picks these up automatically on boot
 COPY quadlets/ /etc/containers/systemd/
 
-# Caddy reverse proxy config
-RUN mkdir -p /etc/eneo
+# Caddy reverse proxy config and persistent data directories
+RUN mkdir -p /etc/eneo /var/lib/eneo/postgres /var/lib/eneo/backend-data
 COPY config/Caddyfile /etc/eneo/Caddyfile
+
+# Open HTTP/HTTPS in firewalld (enabled by default on RHEL; Caddy won't be
+# reachable otherwise). firewall-offline-cmd works without the daemon running.
+RUN firewall-offline-cmd --add-service=http --add-service=https
 
 # First-boot setup script
 COPY scripts/eneo-setup /usr/local/bin/eneo-setup

@@ -9,7 +9,7 @@ ContainerName=eneo-backend
 Network=eneo.network
 EnvironmentFile=/etc/eneo/env
 
-Volume=eneo-backend-data.volume:/app/data
+Volume=/var/lib/eneo/backend-data:/app/data
 Volume=eneo-temp-files.volume:/tmp
 
 HealthCmd=curl -sf http://localhost:8000/openapi.json

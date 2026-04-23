@@ -9,7 +9,7 @@ Network=eneo.network
 EnvironmentFile=/etc/eneo/env
 Environment=RUN_AS_WORKER=true
 
-Volume=eneo-backend-data.volume:/app/data
+Volume=/var/lib/eneo/backend-data:/app/data
 Volume=eneo-temp-files.volume:/tmp
 
 [Service]
